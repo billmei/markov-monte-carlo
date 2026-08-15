@@ -1,0 +1,162 @@
+{
+  "id": "macro-gdp",
+  "name": "Macro regimes → rates → inflation → GDP",
+  "description": "A fixed-horizon macro chain. The economy moves between four regimes; the regime conditions the policy rate, the rate conditions inflation, and inflation conditions realised GDP growth. Sixteen quarters per run.",
+  "mode": "horizon",
+  "maxSteps": 16,
+  "seed": 20240,
+
+  "states": [
+    {
+      "id": "expansion",
+      "label": "Expansion",
+      "category": "growth",
+      "notes": "Above-trend output growth with a tightening labour market.\n\nPersistence is set high (0.72) because post-war expansions have historically been long relative to contractions — see NBER business cycle reference dates for the underlying chronology.\n\nAll figures here are illustrative placeholders, not fitted estimates. Replace them with your own before drawing conclusions."
+    },
+    {
+      "id": "slowdown",
+      "label": "Slowdown",
+      "category": "growth",
+      "notes": "Growth decelerating but still positive. The classic \"soft landing\" candidate.\n\nThis state is the pivot of the whole chain: it is the only one with meaningful probability of moving into either expansion or recession, so the split here dominates the terminal distribution. Try editing it and re-running to see how much of the outcome spread it drives."
+    },
+    {
+      "id": "recession",
+      "label": "Recession",
+      "category": "contraction",
+      "notes": "Two or more quarters of contracting output.\n\nExit probability is deliberately high (0.45 to recovery) because recessions are typically far shorter than expansions.\n\nNote there is no transition straight from recession to expansion — the chain must pass through recovery. That topology is fixed by the JSON; only the probabilities are editable in the UI."
+    },
+    {
+      "id": "recovery",
+      "label": "Recovery",
+      "category": "growth",
+      "notes": "Output rebounding off the trough. Growth is positive and often above trend, but the level of output has not yet caught up.\n\nModelled as transient: most of the mass leaves within a few quarters, mainly into expansion."
+    }
+  ],
+
+  "initial": { "expansion": 0.55, "slowdown": 0.3, "recovery": 0.15 },
+
+  "transitions": {
+    "expansion": [
+      { "to": "expansion", "p": 0.72, "notes": "Regime persistence. The single largest lever on the shape of the fan chart." },
+      { "to": "slowdown", "p": 0.24 },
+      { "to": "recession", "p": 0.04, "notes": "Direct expansion-to-recession jumps are rare but not impossible — think an exogenous shock rather than a gradual turn." }
+    ],
+    "slowdown": [
+      { "to": "expansion", "p": 0.28, "notes": "The soft landing." },
+      { "to": "slowdown", "p": 0.42 },
+      { "to": "recession", "p": 0.3, "notes": "The hard landing. This is the probability most worth arguing about." }
+    ],
+    "recession": [
+      { "to": "recession", "p": 0.55 },
+      { "to": "recovery", "p": 0.45 }
+    ],
+    "recovery": [
+      { "to": "expansion", "p": 0.5 },
+      { "to": "recovery", "p": 0.35 },
+      { "to": "slowdown", "p": 0.12 },
+      { "to": "recession", "p": 0.03, "notes": "A double dip." }
+    ]
+  },
+
+  "variables": [
+    {
+      "id": "policyRate",
+      "label": "Policy rate",
+      "parent": "$state",
+      "unit": "%",
+      "notes": "The central bank's policy rate, conditioned on the regime.\n\nThe link is deliberately loose rather than mechanical: policy responds to the regime with a lag and with judgement, so every regime keeps some probability on every rate level. It is still sharp enough to matter — an expansion is far more likely than a recession to be met with a restrictive stance, and that difference is what carries the regime signal into the rest of the chain.",
+      "levels": [
+        { "id": "low", "label": "Low (0–2%)", "range": [0.0, 2.0] },
+        { "id": "neutral", "label": "Neutral (2–4%)", "range": [2.0, 4.0] },
+        { "id": "high", "label": "Restrictive (4–7%)", "range": [4.0, 7.0] }
+      ],
+      "cpt": {
+        "expansion": { "low": 0.08, "neutral": 0.37, "high": 0.55 },
+        "slowdown": { "low": 0.28, "neutral": 0.52, "high": 0.2 },
+        "recession": { "low": 0.82, "neutral": 0.16, "high": 0.02 },
+        "recovery": { "low": 0.58, "neutral": 0.36, "high": 0.06 }
+      }
+    },
+    {
+      "id": "inflation",
+      "label": "Inflation",
+      "parent": "policyRate",
+      "unit": "%",
+      "notes": "CPI inflation conditioned on the policy rate.\n\nThe conditioning runs rate → inflation, which reads backwards if you think of policy as responding to inflation. It is written this way because the causal story here is transmission: today's stance shapes inflation over the following quarters. The sign follows from that — a restrictive stance cools inflation, an accommodative one lets it run.\n\nIf you want the reaction-function direction instead, swap the two variable blocks in the JSON — declaration order fixes the causal order.",
+      "levels": [
+        { "id": "below", "label": "Below target (0–1.5%)", "range": [0.0, 1.5] },
+        { "id": "target", "label": "At target (1.5–2.5%)", "range": [1.5, 2.5] },
+        { "id": "elevated", "label": "Elevated (2.5–4.5%)", "range": [2.5, 4.5] },
+        { "id": "high", "label": "High (4.5–8%)", "range": [4.5, 8.0] }
+      ],
+      "cpt": {
+        "low": { "below": 0.03, "target": 0.15, "elevated": 0.42, "high": 0.4 },
+        "neutral": { "below": 0.1, "target": 0.5, "elevated": 0.3, "high": 0.1 },
+        "high": { "below": 0.32, "target": 0.54, "elevated": 0.13, "high": 0.01 }
+      }
+    },
+    {
+      "id": "gdpGrowth",
+      "label": "GDP growth",
+      "parent": "inflation",
+      "unit": "%",
+      "notes": "Annualised real GDP growth, conditioned on inflation. This is the output of the chain.\n\nThe relationship is hump-shaped rather than monotone: growth is best when inflation sits at target, and weakens on both sides — a demand shortfall when inflation undershoots, a real-income squeeze plus the policy response that follows when it runs hot.\n\nThe hump is deliberately asymmetric. Overheating is treated as more damaging than undershooting, which is what stops the two tails from cancelling each other out and leaving growth insensitive to the regime. If you flatten it back to symmetry, expect the GDP distribution to stop responding when you edit the transition probabilities — that is a real property of the model, not a bug in the app.",
+      "levels": [
+        { "id": "contraction", "label": "Contraction (−3 to −0.5%)", "range": [-3.0, -0.5] },
+        { "id": "sluggish", "label": "Sluggish (−0.5 to 1.5%)", "range": [-0.5, 1.5] },
+        { "id": "trend", "label": "Trend (1.5–2.8%)", "range": [1.5, 2.8] },
+        { "id": "strong", "label": "Strong (2.8–5%)", "range": [2.8, 5.0] }
+      ],
+      "cpt": {
+        "below": { "contraction": 0.22, "sluggish": 0.46, "trend": 0.28, "strong": 0.04 },
+        "target": { "contraction": 0.02, "sluggish": 0.12, "trend": 0.46, "strong": 0.4 },
+        "elevated": { "contraction": 0.14, "sluggish": 0.38, "trend": 0.36, "strong": 0.12 },
+        "high": { "contraction": 0.46, "sluggish": 0.38, "trend": 0.14, "strong": 0.02 }
+      }
+    }
+  ],
+
+  "outcomes": [
+    {
+      "id": "gdp",
+      "label": "GDP growth",
+      "kind": "numeric",
+      "unit": "%",
+      "source": { "type": "variable", "variableId": "gdpGrowth" },
+      "notes": "Realised growth in the final quarter of the run — not cumulative growth over all sixteen.\n\nWorth knowing when you edit transition probabilities: after sixteen steps the regime mix is close to the chain's stationary distribution, so the final-quarter reading responds less dramatically than the Sankey does. The regime flow can change shape a lot while the GDP median shifts by a tenth of a point. Both are correct; they are answering different questions.\n\nUse the “Final regime” outcome to see the transition edit at full strength."
+    },
+    {
+      "id": "rate",
+      "label": "Policy rate",
+      "kind": "numeric",
+      "unit": "%",
+      "source": { "type": "variable", "variableId": "policyRate" }
+    },
+    {
+      "id": "cpi",
+      "label": "Inflation",
+      "kind": "numeric",
+      "unit": "%",
+      "source": { "type": "variable", "variableId": "inflation" }
+    },
+    {
+      "id": "finalRegime",
+      "label": "Final regime",
+      "kind": "categorical",
+      "source": { "type": "terminalState" },
+      "notes": "Which regime the economy sits in after sixteen quarters."
+    },
+    {
+      "id": "phase",
+      "label": "Growth vs contraction",
+      "kind": "categorical",
+      "source": { "type": "stateCategory" }
+    },
+    {
+      "id": "inflationBand",
+      "label": "Inflation band",
+      "kind": "categorical",
+      "source": { "type": "variableLevel", "variableId": "inflation" }
+    }
+  ]
+}

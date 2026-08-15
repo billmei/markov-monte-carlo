@@ -1,0 +1,189 @@
+{
+  "id": "startup-funding",
+  "name": "Startup funding rounds → exit",
+  "description": "An absorbing funnel. A company progresses through funding rounds until it reaches an exit — IPO, acquisition, acquihire or shutdown. Each round conditions its size, the size conditions dilution, and dilution conditions founder ownership.",
+  "mode": "absorbing",
+  "maxSteps": 8,
+  "seed": 1337,
+
+  "states": [
+    {
+      "id": "seed",
+      "label": "Seed",
+      "notes": "First institutional money in.\n\nThe graduation rate to Series A is the most contested number in this whole model. Published figures vary widely — cohort definition, vintage, and whether \"still private and alive\" counts as a failure all move it by tens of percent.\n\nThe 0.35 here is a placeholder. Substitute a rate from a cohort you trust and re-run."
+    },
+    {
+      "id": "seriesA",
+      "label": "Series A",
+      "notes": "Product-market fit is the implicit gate. Attrition from here is still heavy but less brutal than at seed."
+    },
+    {
+      "id": "seriesB",
+      "label": "Series B",
+      "notes": "Scaling capital. Companies reaching B have materially higher survival odds, and acquisition becomes a more common exit than shutdown."
+    },
+    {
+      "id": "seriesC",
+      "label": "Series C+",
+      "notes": "Late stage. Modelled as a single absorbing-ish stage rather than separate C/D/E rounds — collapsing them keeps the diagram readable without changing the exit distribution much."
+    },
+    {
+      "id": "ipo",
+      "label": "IPO",
+      "terminal": true,
+      "category": "success",
+      "notes": "Public listing. The rarest terminal state by a wide margin."
+    },
+    {
+      "id": "acquisition",
+      "label": "Acquisition",
+      "terminal": true,
+      "category": "success",
+      "notes": "Trade sale at a price that returns capital and pays the founders.\n\nCounted as a success here, but note this lumps together a 3x and a 30x outcome. If that distinction matters to you, split it into two terminal states in the JSON."
+    },
+    {
+      "id": "acquihire",
+      "label": "Acquihire",
+      "terminal": true,
+      "category": "failure",
+      "notes": "Team absorbed, product wound down. Classified as a failure because the preference stack usually leaves common shareholders with little or nothing, even though it does not look like a shutdown from the outside."
+    },
+    {
+      "id": "shutdown",
+      "label": "Shutdown",
+      "terminal": true,
+      "category": "failure",
+      "notes": "Wind-down. The single most likely terminal state for a company entering at seed."
+    }
+  ],
+
+  "initial": { "seed": 1.0 },
+
+  "transitions": {
+    "seed": [
+      { "to": "seriesA", "p": 0.35, "notes": "Seed-to-A graduation. See the note on the Seed node — this is the number to argue with first." },
+      { "to": "acquihire", "p": 0.08 },
+      { "to": "shutdown", "p": 0.57 }
+    ],
+    "seriesA": [
+      { "to": "seriesB", "p": 0.45 },
+      { "to": "acquisition", "p": 0.12 },
+      { "to": "acquihire", "p": 0.08 },
+      { "to": "shutdown", "p": 0.35 }
+    ],
+    "seriesB": [
+      { "to": "seriesC", "p": 0.42 },
+      { "to": "acquisition", "p": 0.24 },
+      { "to": "acquihire", "p": 0.04 },
+      { "to": "shutdown", "p": 0.3 }
+    ],
+    "seriesC": [
+      { "to": "ipo", "p": 0.18, "notes": "Conditional on reaching late stage. Unconditionally it compounds to about 1.3% of seed-stage companies (0.35 × 0.45 × 0.42 × 0.18) — check it against the run counts in the Outcomes view after a simulation." },
+      { "to": "acquisition", "p": 0.46 },
+      { "to": "shutdown", "p": 0.36 }
+    ]
+  },
+
+  "variables": [
+    {
+      "id": "roundSize",
+      "label": "Round size",
+      "parent": "$state",
+      "unit": "$M",
+      "notes": "Capital raised at this stage. Terminal states raise nothing, so they put all their mass on the zero-width \"none\" level.",
+      "levels": [
+        { "id": "none", "label": "None", "range": [0.0, 0.0] },
+        { "id": "small", "label": "Small ($0.5–3M)", "range": [0.5, 3.0] },
+        { "id": "mid", "label": "Mid ($3–15M)", "range": [3.0, 15.0] },
+        { "id": "large", "label": "Large ($15–60M)", "range": [15.0, 60.0] },
+        { "id": "mega", "label": "Mega ($60–300M)", "range": [60.0, 300.0] }
+      ],
+      "cpt": {
+        "seed": { "none": 0, "small": 0.75, "mid": 0.25, "large": 0, "mega": 0 },
+        "seriesA": { "none": 0, "small": 0.1, "mid": 0.7, "large": 0.2, "mega": 0 },
+        "seriesB": { "none": 0, "small": 0, "mid": 0.2, "large": 0.65, "mega": 0.15 },
+        "seriesC": { "none": 0, "small": 0, "mid": 0.05, "large": 0.35, "mega": 0.6 },
+        "ipo": { "none": 1, "small": 0, "mid": 0, "large": 0, "mega": 0 },
+        "acquisition": { "none": 1, "small": 0, "mid": 0, "large": 0, "mega": 0 },
+        "acquihire": { "none": 1, "small": 0, "mid": 0, "large": 0, "mega": 0 },
+        "shutdown": { "none": 1, "small": 0, "mid": 0, "large": 0, "mega": 0 }
+      }
+    },
+    {
+      "id": "dilution",
+      "label": "Dilution",
+      "parent": "roundSize",
+      "unit": "%",
+      "notes": "Equity sold in this round, conditioned on its size.\n\nLarger rounds dilute more in absolute terms but the relationship flattens at the top, because mega-rounds are usually priced off a much higher valuation.",
+      "levels": [
+        { "id": "none", "label": "None", "range": [0.0, 0.0] },
+        { "id": "light", "label": "Light (8–12%)", "range": [8.0, 12.0] },
+        { "id": "standard", "label": "Standard (12–20%)", "range": [12.0, 20.0] },
+        { "id": "heavy", "label": "Heavy (20–35%)", "range": [20.0, 35.0] }
+      ],
+      "cpt": {
+        "none": { "none": 1, "light": 0, "standard": 0, "heavy": 0 },
+        "small": { "none": 0, "light": 0.15, "standard": 0.45, "heavy": 0.4 },
+        "mid": { "none": 0, "light": 0.2, "standard": 0.55, "heavy": 0.25 },
+        "large": { "none": 0, "light": 0.35, "standard": 0.5, "heavy": 0.15 },
+        "mega": { "none": 0, "light": 0.55, "standard": 0.37, "heavy": 0.08 }
+      }
+    },
+    {
+      "id": "founderOwnership",
+      "label": "Founder ownership",
+      "parent": "dilution",
+      "unit": "%",
+      "notes": "Combined founder stake after this round.\n\nCaveat worth knowing before you read too much into it: this conditions only on the current round's dilution, not on the cumulative history, because a variable in this engine has exactly one parent. It therefore understates the compounding of dilution across many rounds. Reading it as \"ownership typical of a company at this stage\" is fair; reading it as a running cap-table balance is not.",
+      "levels": [
+        { "id": "high", "label": "High (45–75%)", "range": [45.0, 75.0] },
+        { "id": "moderate", "label": "Moderate (25–45%)", "range": [25.0, 45.0] },
+        { "id": "low", "label": "Low (10–25%)", "range": [10.0, 25.0] },
+        { "id": "minimal", "label": "Minimal (2–10%)", "range": [2.0, 10.0] }
+      ],
+      "cpt": {
+        "none": { "high": 0.25, "moderate": 0.3, "low": 0.3, "minimal": 0.15 },
+        "light": { "high": 0.5, "moderate": 0.33, "low": 0.15, "minimal": 0.02 },
+        "standard": { "high": 0.28, "moderate": 0.42, "low": 0.25, "minimal": 0.05 },
+        "heavy": { "high": 0.1, "moderate": 0.3, "low": 0.42, "minimal": 0.18 }
+      }
+    }
+  ],
+
+  "outcomes": [
+    {
+      "id": "exit",
+      "label": "Exit outcome",
+      "kind": "categorical",
+      "source": { "type": "terminalState" },
+      "notes": "The terminal state the company landed on."
+    },
+    {
+      "id": "verdict",
+      "label": "Success vs failure",
+      "kind": "categorical",
+      "source": { "type": "stateCategory" },
+      "notes": "IPO and acquisition count as success; acquihire and shutdown as failure."
+    },
+    {
+      "id": "ownership",
+      "label": "Founder ownership at exit",
+      "kind": "numeric",
+      "unit": "%",
+      "source": { "type": "variable", "variableId": "founderOwnership" }
+    },
+    {
+      "id": "lastRound",
+      "label": "Final round size",
+      "kind": "numeric",
+      "unit": "$M",
+      "source": { "type": "variable", "variableId": "roundSize" }
+    },
+    {
+      "id": "dilutionBand",
+      "label": "Final dilution band",
+      "kind": "categorical",
+      "source": { "type": "variableLevel", "variableId": "dilution" }
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "id": "credit-migration",
+  "name": "Credit rating migration → spread → recovery",
+  "description": "A twelve-year rating migration chain. Default is an absorbing state sitting inside a fixed horizon, so once an issuer defaults it stays defaulted for the remaining years rather than ending the run early.",
+  "mode": "horizon",
+  "maxSteps": 12,
+  "seed": 8081,
+
+  "states": [
+    {
+      "id": "a",
+      "label": "A",
+      "category": "investment-grade",
+      "notes": "Upper investment grade. Migration out of A is dominated by downgrades to BBB rather than upgrades — rating drift is asymmetric almost everywhere above BB."
+    },
+    {
+      "id": "bbb",
+      "label": "BBB",
+      "category": "investment-grade",
+      "notes": "The investment-grade floor, and the most consequential state in the chain.\n\nA downgrade from BBB to BB is a \"fallen angel\" event: a large class of mandates cannot hold sub-investment-grade paper, so the transition triggers forced selling on top of the credit deterioration itself. That is why the spread distribution widens so sharply on the BB row.\n\nStructure follows the standard published transition matrices (e.g. the annual S&P Global and Moody's default and rating transition studies); the specific numbers here are round placeholders, not values lifted from any one edition."
+    },
+    {
+      "id": "bb",
+      "label": "BB",
+      "category": "high-yield",
+      "notes": "Top of high yield. Two-way migration is genuinely common here — rising stars back to BBB are about as likely as slides to B."
+    },
+    {
+      "id": "b",
+      "label": "B",
+      "category": "high-yield",
+      "notes": "The bulk of the leveraged issuer universe. Annual default probability starts to bite."
+    },
+    {
+      "id": "ccc",
+      "label": "CCC",
+      "category": "distressed",
+      "notes": "Distressed. Roughly a quarter of issuers here default within the year, and most of the rest are downgraded or withdrawn rather than recovering.\n\nThe cure rate back to B is the number most worth stress-testing — it moves the cumulative default probability a lot over twelve years."
+    },
+    {
+      "id": "default",
+      "label": "Default",
+      "terminal": true,
+      "category": "default",
+      "notes": "Absorbing. No cure path back out.\n\nBecause this scenario runs on a fixed horizon rather than stopping at absorption, a defaulted issuer self-loops here for the remaining years. That is what keeps every column of the Sankey carrying the full population, so the widening default band is directly readable as cumulative default probability."
+    }
+  ],
+
+  "initial": { "a": 0.2, "bbb": 0.5, "bb": 0.3 },
+
+  "transitions": {
+    "a": [
+      { "to": "a", "p": 0.91 },
+      { "to": "bbb", "p": 0.085 },
+      { "to": "bb", "p": 0.004 },
+      { "to": "default", "p": 0.001 }
+    ],
+    "bbb": [
+      { "to": "a", "p": 0.045 },
+      { "to": "bbb", "p": 0.895 },
+      { "to": "bb", "p": 0.05, "notes": "The fallen-angel transition. Small per year, but it compounds over a twelve-year horizon." },
+      { "to": "b", "p": 0.008 },
+      { "to": "default", "p": 0.002 }
+    ],
+    "bb": [
+      { "to": "bbb", "p": 0.06, "notes": "Rising star." },
+      { "to": "bb", "p": 0.83 },
+      { "to": "b", "p": 0.09 },
+      { "to": "ccc", "p": 0.01 },
+      { "to": "default", "p": 0.01 }
+    ],
+    "b": [
+      { "to": "bb", "p": 0.05 },
+      { "to": "b", "p": 0.83 },
+      { "to": "ccc", "p": 0.08 },
+      { "to": "default", "p": 0.04 }
+    ],
+    "ccc": [
+      { "to": "b", "p": 0.15, "notes": "The cure rate. Stress-test this one — over twelve years it dominates cumulative defaults." },
+      { "to": "ccc", "p": 0.6 },
+      { "to": "default", "p": 0.25 }
+    ]
+  },
+
+  "variables": [
+    {
+      "id": "spread",
+      "label": "Credit spread",
+      "parent": "$state",
+      "unit": "bps",
+      "notes": "Option-adjusted spread over the risk-free curve, conditioned on the current rating.\n\nThe overlap between adjacent rating rows is intentional: spreads at a given rating vary far more across the cycle than they do across one notch of rating at a point in time.",
+      "levels": [
+        { "id": "tight", "label": "Tight (40–90bp)", "range": [40.0, 90.0] },
+        { "id": "moderate", "label": "Moderate (90–200bp)", "range": [90.0, 200.0] },
+        { "id": "wide", "label": "Wide (200–600bp)", "range": [200.0, 600.0] },
+        { "id": "distressed", "label": "Distressed (600–2000bp)", "range": [600.0, 2000.0] }
+      ],
+      "cpt": {
+        "a": { "tight": 0.75, "moderate": 0.23, "wide": 0.02, "distressed": 0 },
+        "bbb": { "tight": 0.3, "moderate": 0.55, "wide": 0.14, "distressed": 0.01 },
+        "bb": { "tight": 0.04, "moderate": 0.4, "wide": 0.5, "distressed": 0.06 },
+        "b": { "tight": 0, "moderate": 0.12, "wide": 0.63, "distressed": 0.25 },
+        "ccc": { "tight": 0, "moderate": 0.01, "wide": 0.24, "distressed": 0.75 },
+        "default": { "tight": 0, "moderate": 0, "wide": 0.05, "distressed": 0.95 }
+      }
+    },
+    {
+      "id": "recovery",
+      "label": "Recovery value",
+      "parent": "spread",
+      "unit": "% of par",
+      "notes": "Expected recovery on the instrument, conditioned on where the spread is trading.\n\nThe market's mark is the conditioning variable rather than the rating, because a distressed price already embeds the market's recovery view — which is usually ahead of the agencies.",
+      "levels": [
+        { "id": "full", "label": "Near par (95–100)", "range": [95.0, 100.0] },
+        { "id": "impaired", "label": "Impaired (60–95)", "range": [60.0, 95.0] },
+        { "id": "low", "label": "Low (25–60)", "range": [25.0, 60.0] },
+        { "id": "severe", "label": "Severe (0–25)", "range": [0.0, 25.0] }
+      ],
+      "cpt": {
+        "tight": { "full": 0.9, "impaired": 0.1, "low": 0, "severe": 0 },
+        "moderate": { "full": 0.6, "impaired": 0.36, "low": 0.04, "severe": 0 },
+        "wide": { "full": 0.15, "impaired": 0.5, "low": 0.3, "severe": 0.05 },
+        "distressed": { "full": 0.01, "impaired": 0.14, "low": 0.45, "severe": 0.4 }
+      }
+    }
+  ],
+
+  "outcomes": [
+    {
+      "id": "finalRating",
+      "label": "Rating after 12 years",
+      "kind": "categorical",
+      "source": { "type": "terminalState" },
+      "notes": "The share landing on Default is the cumulative twelve-year default probability."
+    },
+    {
+      "id": "grade",
+      "label": "Credit grade",
+      "kind": "categorical",
+      "source": { "type": "stateCategory" }
+    },
+    {
+      "id": "finalSpread",
+      "label": "Spread",
+      "kind": "numeric",
+      "unit": "bps",
+      "source": { "type": "variable", "variableId": "spread" }
+    },
+    {
+      "id": "finalRecovery",
+      "label": "Recovery value",
+      "kind": "numeric",
+      "unit": "% of par",
+      "source": { "type": "variable", "variableId": "recovery" }
+    },
+    {
+      "id": "spreadBand",
+      "label": "Spread band",
+      "kind": "categorical",
+      "source": { "type": "variableLevel", "variableId": "spread" }
+    }
+  ]
+}
