@@ -7,12 +7,13 @@ import { validateScenario } from "../schema";
 import type { Scenario } from "../types";
 
 /**
- * Guards the bundled scenario files. `src/scenarios/index.ts` discovers them
- * with Vite's `import.meta.glob`, which bun test cannot evaluate, so this walks
- * the directory directly — and that also means a newly added scenario file is
- * covered here automatically.
+ * Guards the bundled scenario files in the top-level `scenarios/` directory.
+ *
+ * `src/scenarios.ts` discovers them with Vite's `import.meta.glob`, which bun
+ * test cannot evaluate, so this walks the directory directly — which also means
+ * a newly added scenario file is covered here automatically.
  */
-const dir = join(import.meta.dir, "..", "..", "scenarios");
+const dir = join(import.meta.dir, "..", "..", "..", "scenarios");
 const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
 
 test("the bundled scenario directory is not empty", () => {
