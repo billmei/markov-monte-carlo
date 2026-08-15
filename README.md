@@ -43,9 +43,9 @@ Below that, settings: run count, seed, step count, scenario import/export, and r
 
 ## Scenario format
 
-Scenarios live in [`src/scenarios/`](src/scenarios). Dropping a `.json` file into that folder
-registers it automatically — there is no manifest. The three bundled examples are the
-reference:
+Scenarios live in [`scenarios/`](scenarios), outside `src/` — a scenario is authored content,
+not application source. Dropping a `.json` file into that folder registers it automatically;
+there is no manifest to update. The three bundled examples are the reference:
 
 - **`macro-gdp.json`** — fixed-horizon macro chain: regimes → policy rate → inflation → GDP growth.
 - **`startup-funding.json`** — absorbing funnel: seed → Series A/B/C → IPO / acquisition / acquihire / shutdown.
@@ -129,6 +129,7 @@ The engine is pure TypeScript with no React import anywhere, so scenarios stay d
 UI can be developed against a stable surface.
 
 ```
+scenarios/           # authored JSON — the data, kept out of the source tree
 src/
 ├── engine/          # simulation core — pure, tested, framework-free
 │   ├── types.ts     schema.ts      # data model + zod validation
@@ -136,7 +137,7 @@ src/
 │   ├── markov.ts    variables.ts   # path rollout, CPT evaluation
 │   ├── simulate.ts  stats.ts       # Monte Carlo driver, histograms/percentiles
 │   └── sankey.ts                   # run paths → flow graph (sampled + analytic)
-├── scenarios/       # bundled JSON, auto-discovered via import.meta.glob
+├── scenarios.ts     # loader; discovers ../scenarios/*.json via import.meta.glob
 ├── state/           # zustand store; edits held as an overlay on the file
 ├── theme/           # design tokens → CSS custom properties + chart colours
 ├── charts/          # Chart.js registration and shared option factories
@@ -153,6 +154,32 @@ drifted, and export emits a valid scenario with the edits baked in.
 `(seed, runIndex)`, so a given run is reproducible on its own and raising the run count
 extends the results rather than reshuffling them. Same seed in, byte-identical results out —
 which is what makes "click a run to see its history" and before/after comparison trustworthy.
+
+## CI and deployment
+
+Two workflows, both on bun:
+
+- **[`ci.yml`](.github/workflows/ci.yml)** — on every push to `main` and every pull request:
+  `bun test`, `bun run typecheck`, `bun run build`. The test run validates every file in
+  `scenarios/`, so a malformed scenario fails CI rather than the app.
+- **[`deploy.yml`](.github/workflows/deploy.yml)** — on push to `main`, publishes to GitHub
+  Pages. It re-runs the tests before building so a broken build cannot reach the published
+  site.
+
+The site is static, so nothing but the built `dist/` is deployed. Vite's `base` comes from
+`BASE_PATH`, which the deploy workflow feeds from `actions/configure-pages` rather than
+hardcoding — a project site gets `/<repo>/`, a custom domain gets `/`, and both work without
+editing the config.
+
+To enable it: **Settings → Pages → Build and deployment → Source: GitHub Actions**, then push
+to `main`. Note that Pages on a **private** repository requires a paid GitHub plan; on a free
+account the deploy job will fail until the repo is made public.
+
+Reproduce a Pages-style build locally:
+
+```bash
+BASE_PATH=/markov-monte-carlo bun run build
+```
 
 ## Colour
 

@@ -2,11 +2,16 @@ import { validateScenario, type ValidationIssue } from "@/engine";
 import type { Scenario } from "@/engine";
 
 /**
- * Bundled scenarios, discovered from the JSON files sitting next to this one.
- * Dropping a new `.json` file into this folder registers it — there is no
+ * Bundled scenarios, discovered from the top-level `scenarios/` directory.
+ *
+ * They live outside `src/` deliberately: a scenario is authored content, not
+ * application source, and someone adding one should not have to go looking
+ * inside the code. Dropping a `.json` file in there registers it — there is no
  * manifest to keep in sync.
  */
-const modules = import.meta.glob<{ default: unknown }>("./*.json", { eager: true });
+const modules = import.meta.glob<{ default: unknown }>("../scenarios/*.json", {
+  eager: true,
+});
 
 export interface BundledScenario {
   /** Source filename, used as a stable key and in error messages. */
@@ -24,7 +29,7 @@ const loaded: BundledScenario[] = [];
 const broken: BrokenScenario[] = [];
 
 for (const [path, module] of Object.entries(modules)) {
-  const file = path.replace(/^\.\//, "");
+  const file = path.replace(/^.*\//, "");
   const result = validateScenario(module.default);
   if (result.ok) {
     loaded.push({ file, scenario: result.scenario, warnings: result.warnings });
