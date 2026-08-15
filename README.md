@@ -7,17 +7,28 @@ and a downstream causal chain of variables. The app runs Monte Carlo rollouts th
 chain and shows both the aggregate probability flow and the individual rollouts — including
 the exact path any single run took.
 
-Probabilities are editable live in the diagram; the JSON stays in charge of *which*
+Probabilities are editable live in the diagram; the JSON stays in charge of _which_
 transitions exist.
+
+## Commands
+
+Requires [bun](https://bun.sh). No backend, no network calls — everything runs in the browser.
 
 ```bash
 bun install
 bun run dev       # http://localhost:5173
 bun test          # engine + state + theme unit tests
-bun run build     # tsc --noEmit && vite build
+bun run typecheck       # tsc --noEmit
+bun run build           # tsc --noEmit && vite build
+bun run preview
 ```
 
-Requires [bun](https://bun.sh). No backend, no network calls — everything runs in the browser.
+Run a single test file or test by name:
+
+```bash
+bun test src/engine/__tests__/simulate.test.ts
+bun test -t "name pattern"
+```
 
 ## What's on screen
 
@@ -29,12 +40,12 @@ variable, each with an editable conditional probability table.
 
 **Right — the results.** Four views over the same runs and the same selection:
 
-| View | Shows |
-|---|---|
-| Distribution | Histogram of a numeric outcome, with P5/P50/P95 and mean |
-| Run traces | Individual runs overlaid, over a P5–P95 band computed from *all* runs |
-| Outcomes | Counts per terminal state or category; click to filter |
-| Run table | Every run, sortable and windowed |
+| View         | Shows                                                                 |
+| ------------ | --------------------------------------------------------------------- |
+| Distribution | Histogram of a numeric outcome, with P5/P50/P95 and mean              |
+| Run traces   | Individual runs overlaid, over a P5–P95 band computed from _all_ runs |
+| Outcomes     | Counts per terminal state or category; click to filter                |
+| Run table    | Every run, sortable and windowed                                      |
 
 Selecting a run anywhere highlights it everywhere — including its exact path through the
 Sankey — and opens a step-by-step history showing the probability of each branch it took.
@@ -58,46 +69,62 @@ produce a readable list of problems rather than a crash.
 {
   "id": "startup-funding",
   "name": "Startup funding rounds → exit",
-  "mode": "absorbing",          // "absorbing" | "horizon"
+  "mode": "absorbing", // "absorbing" | "horizon"
   "maxSteps": 8,
   "seed": 1337,
 
   "states": [
-    { "id": "seed", "label": "Seed", "notes": "Free-form text. Shown on hover — sources and citations go here." },
-    { "id": "ipo",  "label": "IPO", "terminal": true, "category": "success" }
+    {
+      "id": "seed",
+      "label": "Seed",
+      "notes": "Free-form text. Shown on hover — sources and citations go here.",
+    },
+    { "id": "ipo", "label": "IPO", "terminal": true, "category": "success" },
   ],
 
-  "initial": { "seed": 1.0 },   // start weights, normalized
+  "initial": { "seed": 1.0 }, // start weights, normalized
 
   "transitions": {
     "seed": [
-      { "to": "seriesA",  "p": 0.35, "notes": "Per-transition notes work too." },
-      { "to": "shutdown", "p": 0.65 }
-    ]
+      { "to": "seriesA", "p": 0.35, "notes": "Per-transition notes work too." },
+      { "to": "shutdown", "p": 0.65 },
+    ],
   },
 
   // Ordered causal chain. Each variable conditions on ONE parent: "$state",
   // or a variable declared before it.
   "variables": [
     {
-      "id": "roundSize", "label": "Round size", "parent": "$state", "unit": "$M",
+      "id": "roundSize",
+      "label": "Round size",
+      "parent": "$state",
+      "unit": "$M",
       "levels": [
         { "id": "small", "label": "Small ($0.5–3M)", "range": [0.5, 3.0] },
-        { "id": "mid",   "label": "Mid ($3–15M)",    "range": [3.0, 15.0] }
+        { "id": "mid", "label": "Mid ($3–15M)", "range": [3.0, 15.0] },
       ],
       "cpt": {
-        "seed":    { "small": 0.75, "mid": 0.25 },
-        "seriesA": { "small": 0.10, "mid": 0.90 }
-      }
-    }
+        "seed": { "small": 0.75, "mid": 0.25 },
+        "seriesA": { "small": 0.1, "mid": 0.9 },
+      },
+    },
   ],
 
   "outcomes": [
-    { "id": "exit", "label": "Exit outcome", "kind": "categorical",
-      "source": { "type": "terminalState" } },
-    { "id": "size", "label": "Final round size", "kind": "numeric", "unit": "$M",
-      "source": { "type": "variable", "variableId": "roundSize" } }
-  ]
+    {
+      "id": "exit",
+      "label": "Exit outcome",
+      "kind": "categorical",
+      "source": { "type": "terminalState" },
+    },
+    {
+      "id": "size",
+      "label": "Final round size",
+      "kind": "numeric",
+      "unit": "$M",
+      "source": { "type": "variable", "variableId": "roundSize" },
+    },
+  ],
 }
 ```
 
@@ -111,7 +138,7 @@ the full population.
 **`notes`** — free-form, on states, transitions, variables and outcomes. Whitespace is
 preserved and bare URLs become links. This is where sources and reasoning go.
 
-**`variables`** — declaration order *is* causal order. A variable may only condition on
+**`variables`** — declaration order _is_ causal order. A variable may only condition on
 something declared before it, which makes a dependency cycle impossible to express. Each
 variable is drawn once per step, conditioned on its parent at that same step, so a run
 yields a genuine series in `horizon` mode and one reading per hop in `absorbing` mode.
@@ -154,6 +181,8 @@ drifted, and export emits a valid scenario with the edits baked in.
 `(seed, runIndex)`, so a given run is reproducible on its own and raising the run count
 extends the results rather than reshuffling them. Same seed in, byte-identical results out —
 which is what makes "click a run to see its history" and before/after comparison trustworthy.
+
+Path alias: `@/*` resolves to `src/*` (configured in both `tsconfig.json` and `vite.config.ts`).
 
 ## CI and deployment
 

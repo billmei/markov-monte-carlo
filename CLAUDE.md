@@ -1,0 +1,1 @@
+**Never poll CI on a time loop.** After pushing a PR, do not schedule recurring check-ins (`send_later`, `ScheduleWakeup`, or any sleep/poll loop) to re-check CI status. React only to `<github-webhook-activity>` events as they arrive.
